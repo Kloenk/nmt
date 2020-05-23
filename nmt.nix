@@ -1,10 +1,10 @@
 { config, lib, pkgs, ... }:
 
-with lib;
-
 let
 
   cfg = config.nmt;
+
+  inherit (lib) mkOption types;
 
 in {
   options.nmt = {
@@ -22,72 +22,44 @@ in {
     };
 
     script = mkOption {
-      type = types.str;
+      type = types.lines;
       example = ''
         assertFileExists home-files/.Xresources
       '';
       description = "Test script.";
     };
 
-    tested = mkOption {
-      type = types.package;
-      readOnly = true;
-      description = ''
-        The tested module result package.
+    startUpCommand = mkOption {
+      type = types.lines;
+      default = ''
+        out=$out/${cfg.name}
+        mkdir -p $out
       '';
+      description = "command to run befor the assertions";
     };
 
-    result = {
-      success = mkOption {
-        type = types.bool;
-        internal = true;
-        readOnly = true;
-        description = ''
-          Whether the test succeeded.
-        '';
-      };
+    inputs = mkOption {
+      type = types.listOf types.package;
+      default = with pkgs; [ coreutils diffutils findutils gnugrep ];
+      description = "packages that are availabe in the test suit";
+    };
 
-      report = mkOption {
-        type = types.package;
-        internal = true;
-        readOnly = true;
-        description = ''
-          The test results.
-        '';
-      };
+    toplevel = mkOption {
+      type = types.package;
+      description = "package to build for the test";
     };
   };
 
   config = {
-    nmt.result = {
-      success = ''
-        OK
-      '' == builtins.readFile "${cfg.result.report}/result";
+    nmt.toplevel = pkgs.runCommand "test-${cfg.name}" {
+      inputs = cfg.inputs;
+    } ''
+      #!${pkgs.bash}/bin/bash
+      ${cfg.startUpCommand}
 
-      report = let
-        scriptPath =
-          makeBinPath (with pkgs; [ coreutils diffutils findutils gnugrep ]);
+      . "${./bash-lib/assertions.sh}"
 
-        testScript = pkgs.writeShellScript "nmt-test-script-${cfg.name}" ''
-          set -uo pipefail
-
-          export PATH="${scriptPath}"
-
-          . "${./bash-lib/assertions.sh}"
-
-          TESTED="${cfg.tested}"
-          ${cfg.script}
-        '';
-      in pkgs.runCommandLocal "nmt-report-${cfg.name}" { } ''
-        mkdir -p $out
-        ln -s ${cfg.tested} $out/tested
-        ln -s ${testScript} $out/script
-        if ${testScript} 2>&1 > $out/output; then
-          echo OK > $out/result
-        else
-          echo FAILED > $out/result
-        fi
-      '';
-    };
+      ${cfg.script}
+    '';
   };
 }
