@@ -29,13 +29,19 @@ in {
       description = "Test script.";
     };
 
-    startUpCommand = mkOption {
+    startUpCommands = mkOption {
       type = types.lines;
       default = ''
         out=$out/${cfg.name}
         mkdir -p $out
       '';
       description = "command to run befor the assertions";
+    };
+
+    log = mkOption {
+      type = types.bool;
+      default = true;
+      description = "wether to log the assertions to the output";
     };
 
     inputs = mkOption {
@@ -55,7 +61,9 @@ in {
       inputs = cfg.inputs;
     } ''
       #!${pkgs.bash}/bin/bash
-      ${cfg.startUpCommand}
+      ${cfg.startUpCommands}
+
+      ${lib.optionalString cfg.log "NMT_LOG=1"} 
 
       . "${./bash-lib/assertions.sh}"
 
